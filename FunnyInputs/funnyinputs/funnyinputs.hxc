@@ -1,0 +1,155 @@
+import funkin.modding.module.Module;
+import funkin.play.PlayState;
+import funkin.modding.module.ModuleHandler;
+import funkin.save.Save;
+import StringTools;
+import funkin.input.PreciseInputManager;
+import funkin.play.notes.NoteSprite;
+import funkin.play.notes.SustainTrail;
+import funkin.util.Constants;
+import thx.Arrays;
+import funkin.Conductor;
+
+/*
+    - No anti-spam
+    - Penalizes missing sustains
+    -
+*/
+class FunnyInputs extends Module {
+    var loadedGame:Bool = false;
+    var disableModKeys:Bool = false;
+    public function new() {
+        super("FunnyInputs", 20);
+    }
+
+    override function onStateChangeEnd(event){
+        loadedGame = (event.targetState == PlayState.instance);
+
+        if (loadedGame) {
+            PlayState.instance.disableKeys = true;
+        }
+        super.onStateChangeEnd(event);
+    }
+
+    override function onCountdownStart(event) {
+        super.onCountdownStart(event); // this is the part where i kill unworthy notes...
+        if (loadedGame) {
+            /*
+                Check every note, if positional difference between previousNote & currentNote is less ```measureLengthMs / 192```, then we kill currentNote.
+                If currentNote survives, then previousNote becomes currentNote.
+                This helps with like performance, n shit
+            */
+            if (PlayState.instance.playerStrumline != null && PlayState.instance.playerStrumline.notes != null) {
+                var notesSorted = Arrays.order(PlayState.instance.playerStrumline.notes.members, (a,b) -> return byValues(-1, a.strumTime, b.strumTime));
+                var previousNote = null;
+                for (currentNote in notesSorted) {
+
+                    var noteSurvived = true;
+                    if (previousNote != null) {
+                        if (previousNote.direction == currentNote.direction &&
+                            Math.abs(previousNote.strumTime - currentNote.strumTime) <= Conductor.instance.measureLengthMs / 192)
+                        noteSurvived = false;
+                        currentNote.kill();
+                        currentNote.destroy();
+                    }
+                    if (noteSurvived)
+                        previousNote = currentNote;
+                }
+            }
+        }
+
+    }
+    override function onUpdate(e) {
+        super.onUpdate(e);
+        if (loadedGame) {
+            if (!PlayState.instance.isInCutscene && !disableModKeys) PlayState.instance.debugKeyShit();
+            if (PlayState.instance.isInCutscene && !disableModKeys) PlayState.instance.handleCutsceneKeys(e.elapsed);
+            processInputQueue(); // new input system!!
+            for (holdNote in PlayState.instance.playerStrumline.holdNotes.members){
+                if (holdNote != null && holdNote.missedNote && !holdNote.handledMiss)
+                {
+                    // The player dropped a hold note.
+                    holdNote.handledMiss = true;
+                    if (holdNote.sustainLength >= 130) { // check if ur releasing too early
+                        PlayState.instance.onNoteMiss(null, true, -Constants.HEALTH_MISS_PENALTY);
+                    }
+                }
+            }
+        }
+    }
+
+    function processInputQueue() {
+        if (PlayState.instance.inputPressQueue.length + PlayState.instance.inputReleaseQueue.length == 0) return;
+
+        // Ignore inputs during cutscenes.
+        if (PlayState.instance.isInCutscene || PlayState.instance.disableModKeys)
+        {
+            PlayState.instance.inputPressQueue = [];
+            PlayState.instance.inputReleaseQueue = [];
+            return;
+        }
+
+        // Generate a list of notes within range.
+        var notesInRange:Array<NoteSprite> = Arrays.order(PlayState.instance.playerStrumline.getNotesMayHit(), (a,b) -> return byValues(-1, a.strumTime, b.strumTime));
+        var holdNotesInRange:Array<SustainTrail> = PlayState.instance.playerStrumline.getHoldNotesHitOrMissed();
+
+        var notesByDirection:Array<Array<NoteSprite>> = [[], [], [], []];
+
+        for (note in notesInRange)
+            notesByDirection[note.direction].push(note);
+
+        while (PlayState.instance.inputPressQueue.length > 0)
+        {
+            var input = PlayState.instance.inputPressQueue.shift();
+
+            PlayState.instance.playerStrumline.pressKey(input.noteDirection);
+
+            var notesInDirection:Array<NoteSprite> = notesByDirection[input.noteDirection];
+
+            if (notesInDirection.length == 0)
+            {
+                // Play the strumline animation.
+                PlayState.instance.playerStrumline.playPress(input.noteDirection);
+            }
+            else
+            {
+                // Choose the first note, deprioritizing low priority notes.
+                var targetNote:Null<NoteSprite> = Arrays.find(notesInDirection, (note) -> !note.lowPriority);
+                if (targetNote == null) targetNote = notesInDirection[0];
+                if (targetNote != null)  {
+                    PlayState.instance.goodNoteHit(targetNote, input);
+
+                    notesInDirection.remove(targetNote);
+
+                    // Play the strumline animation.
+                    PlayState.instance.playerStrumline.playConfirm(input.noteDirection);
+                }
+            }
+        }
+
+        while (PlayState.instance.inputReleaseQueue.length > 0)
+        {
+            var input = PlayState.instance.inputReleaseQueue.shift();
+
+            // Play the strumline animation.
+            PlayState.instance.playerStrumline.playStatic(input.noteDirection);
+
+            PlayState.instance.playerStrumline.releaseKey(input.noteDirection);
+        }
+    }
+    function byValues(Order:Int, Value1:Float, Value2:Float):Int
+	{
+		var result:Int = 0;
+
+		if (Value1 < Value2)
+		{
+			result = Order;
+		}
+		else if (Value1 > Value2)
+		{
+			result = -Order;
+		}
+
+		return result;
+	}
+}
