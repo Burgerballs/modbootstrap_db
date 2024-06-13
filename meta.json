@@ -1,9 +1,17 @@
 {
   "name": "Official ModBootstrap Database",
+  "description": "The official database for mods downloadable via ModBootstrap, curated by Burgerballs.",
   "tags": [
     "one-shot",
     "quality-of-life",
     "full-week",
-    "api"
+    "api",
+    "modbootstrap-compatible",
+    "port"
+  ],
+  "platforms" : [
+    "mac",
+    "windows",
+    "linux"
   ]
 }
