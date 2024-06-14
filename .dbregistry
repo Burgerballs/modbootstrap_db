@@ -1,1 +1,8 @@
-FunnyInputs
+{
+  "mods": [
+    {
+      name: "FunnyInputs",
+      description: "Hello world!"
+    },
+  ]
+}
