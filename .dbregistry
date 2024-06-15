@@ -2,7 +2,22 @@
   "mods": [
     {
       "name": "FunnyInputs",
-      "description": "Hello world!"
+      "description": "Hello world!",
+      "tags": ["quality-of-life"],
+      "platforms": ["mac", "windows", "linux"]
     }
+  ]
+  "tags": [
+    "one-shot",
+    "quality-of-life",
+    "full-week",
+    "api",
+    "modbootstrap-compatible",
+    "port"
+  ],
+  "platforms" : [
+    "mac",
+    "windows",
+    "linux"
   ]
 }
